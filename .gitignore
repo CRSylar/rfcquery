@@ -1,0 +1,10 @@
+#
+
+# IDEs
+.vscode
+.idea
+
+# Test related files
+*.test
+*.out
+
