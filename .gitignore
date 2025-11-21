@@ -1,10 +1,31 @@
 #
 
 # IDEs
-.vscode
-.idea
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # Test related files
 *.test
 *.out
+*.prof
 
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+dist/
+build/
+
+# Dependency
+
+vendor/
