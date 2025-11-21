@@ -1,4 +1,4 @@
-package plugins_test
+package formurlencoded_test
 
 import (
 	"net/url"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/CRSylar/rfcquery"
-	"github.com/CRSylar/rfcquery/plugins"
+	formurlencoded "github.com/CRSylar/rfcquery/plugins/form_urlencoded"
 )
 
 func TestFormURLEncodedParser_Parse(t *testing.T) {
@@ -89,7 +89,7 @@ func TestFormURLEncodedParser_Parse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := &plugins.FormURLEncodedParser{}
+			parser := &formurlencoded.FormURLEncodedParser{}
 			scanner := rfcquery.NewScanner(tt.input)
 
 			result, err := parser.Parse(scanner)
@@ -138,7 +138,7 @@ func TestStdlibCompatibility(t *testing.T) {
 				t.Fatalf("stdlib ParseQuery failed: %v", err)
 			}
 
-			rfcValues, err := plugins.ParseFormURLEncoded(tc)
+			rfcValues, err := formurlencoded.ParseFormURLEncoded(tc)
 			if err != nil {
 				t.Fatalf("rfcQuery ParseFormURLEncoded failed: %v", err)
 			}
