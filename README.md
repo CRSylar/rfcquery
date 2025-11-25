@@ -141,7 +141,28 @@ Built-in parsers with a common interface:
     - Supports arrays, objects, primitives
     - Optional: can parse entire query string as JSON ( without the 'key' )
 
-3. Custom Parser
+3. GraphQL-over-HTTP
+    Extract GraphQL queries from URL parameters (per [GraphQL-over-HTTP spec](https://graphql.github.io/graphql-over-http/)):
+
+    ```go
+    query := `query=query GetUser($id: ID!) { user(id: $id) { name } }&variables={"id": "123"}`
+    
+    graphql, err := rfcquery.ParseGraphQLQuery(query)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println(graphql.Query)         // The GraphQL query document
+    fmt.Println(graphql.OperationName) // "GetUser"
+    fmt.Println(graphql.Variables)     // map[id:123]
+    ```
+    Features:
+    - Handles special GraphQL characters (@, !, $) without percent-encoding
+    - Parses optional variables JSON parameter
+    - Supports operationName for multiple operations
+    - Works with percent-encoded queries
+    
+4. Custom Parser
     To implement a custom parser implement the `Parser` interface
     ```go
     type MyCustomParser struct{}
@@ -159,11 +180,13 @@ Built-in parsers with a common interface:
 
 
 ### Roadmap
- - [ ] GraphQL query parser plugin
+ - [X] GraphQL query parser plugin
+ - [ ] TMF query parser plugin
  - [ ] Query builder API (fluent interface)
  - [ ] Streaming parser for very large queries
  - [ ] JSON Schema validation for JSON-in-query
- - [ ] Performance optimizations with pooled scanners
+ - [ ] Performance optimizations with pooled scanner
+ - [ ] encoder package for strict rfc encoding
 
 ## Contributing
 
