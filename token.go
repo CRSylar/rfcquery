@@ -81,3 +81,21 @@ func (ts TokenSlice) Bytes() []byte {
 	}
 	return buf.Bytes()
 }
+
+func (ts TokenSlice) SplitSubDelimiter(del string) []TokenSlice {
+	slices := make([]TokenSlice, 0)
+
+	subSlice := make(TokenSlice, 0)
+	for _, token := range ts {
+		if token.Type == TokenSubDelims && token.Value == del {
+			slices = append(slices, subSlice)
+			subSlice = make(TokenSlice, 0)
+			continue
+		}
+
+		subSlice = append(subSlice, token)
+	}
+	slices = append(slices, subSlice)
+
+	return slices
+}

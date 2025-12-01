@@ -2,7 +2,6 @@ package tmfparser
 
 import (
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/CRSylar/rfcquery"
@@ -21,7 +20,7 @@ const (
 )
 
 // OperatorMap maps encoded operators to their string reprentation
-var operatorMap = map[string]TMFOperator{
+var operatorsMap = map[string]TMFOperator{
 	"%3D":    TMFOperatorEq,
 	"%3E":    TMFOperatorGt,
 	".gt":    TMFOperatorGt,
@@ -71,7 +70,7 @@ type TMFParser struct {
 
 func NewTMFParser() *TMFParser {
 	return &TMFParser{
-		OperatorMap:      operatorMap,
+		OperatorMap:      operatorsMap,
 		StrictValidation: true,
 		EnableGrouping:   true,
 	}
@@ -130,7 +129,7 @@ outer:
 
 		if p.isFilterSegment(segment.Key) {
 			if segment.Expressions != nil {
-				query.Expressions[segment.Key] = append(query.Expressions[segment.Key], *segment.Expressions)
+				query.Expressions[segment.Key] = append(query.Expressions[segment.Key], segment.Expressions...)
 			}
 		} else {
 			query.OtherParams[segment.Key] = append(query.OtherParams[segment.Key], segment.Value...)
@@ -156,11 +155,12 @@ type segmentResult struct {
 }
 
 func (p *TMFParser) parseSegment(scanner *rfcquery.Scanner) (*segmentResult, error) {
+	// the keyTokens will be the field -- NOTE. can contain an operator in the dot-notation (.gt/.lt/.gte/.lte)
 	keyTokens, err := scanner.CollectUntil(func(t rfcquery.Token) bool {
 		separator := t.Type == rfcquery.TokenSubDelims && (t.Value == "=" || t.Value == ";" || t.Value == "&")
 
-		// 																		checking operators    =										>									<											<=										>=											!=
-		operator := t.Type == rfcquery.TokenPercentEncoded && (t.Value == "%3D" || t.Value == "%3E" || t.Value == "%3C" || t.Value == "%3E%3D" || t.Value == "%3C%3D" || t.Value == "%21%3D")
+		// 																		checking operators    =										>									<											!=
+		operator := t.Type == rfcquery.TokenPercentEncoded && (t.Value == "%3D" || t.Value == "%3E" || t.Value == "%3C" ||  t.Value == "%21")
 		return separator || operator
 	})
 	if err != nil {
@@ -170,6 +170,15 @@ func (p *TMFParser) parseSegment(scanner *rfcquery.Scanner) (*segmentResult, err
 	sepToken, err := scanner.PeekToken()
 	if err != nil {
 		return nil, err
+	}
+
+	key := keyTokens.StringDecoded()
+	dotOperator := "%3D"
+
+	if hasDotNotationOperatorSuffix(key) {
+		lastDot := strings.LastIndex(key, ".")
+		dotOperator = key[lastDot:]
+		key = key[:lastDot]
 	}
 
 	result := &segmentResult{
@@ -203,11 +212,17 @@ func (p *TMFParser) parseSegment(scanner *rfcquery.Scanner) (*segmentResult, err
 		return nil, err
 	}
 
+	if len(valueTokens) == 0 {
+		// No values extracted, return
+		result.Expressions = make([]TMFExpression, 0)
+		return result, nil
+	}
+
 	result.Value = strings.Split(valueTokens.StringDecoded(), ",")
 	result.ValueTokens = valueTokens
 
 	if p.isFilterSegment(keyTokens.StringDecoded()) {
-		result.Expressions = append(result.Expressions, p.parseFilterValue(keyTokens.StringDecoded(), valueTokens)...)
+		result.Expressions = append(result.Expressions, p.parseFilterValue(dotOperator, valueTokens)...)
 	}
 
 	return result, nil
@@ -217,49 +232,32 @@ func (p *TMFParser) isFilterSegment(key string) bool {
 	return key != "" && key != "sort" && key != "limit" && key != "offset"
 }
 
-func (p *TMFParser) parseFilterValue(field string, tokens rfcquery.TokenSlice) []TMFExpression {
-	slog.Info("parseFilterValue - received", "field", field, "tokens", tokens)
-	currPos := 0
+func (p *TMFParser) parseFilterValue(dotOperator string, tokens rfcquery.TokenSlice) []TMFExpression {
 
 	results := []TMFExpression{}
 
-	for currPos < len(tokens) {
-		operatorFound := false
+	// check if the tokenSlice first (and second) element is a TokenPercentEncoded
+	if tokens[0].Type == rfcquery.TokenPercentEncoded && isPercentOperator(tokens[0]) {
+		// if the first token is a valid operator we can proceed to extract it from the slice (there can be up to 2 operators, for cases like >= / <= )
+		operator, opLen := parseOperatorFromTokenSlice(tokens)
 
-		for opStr, opType := range p.OperatorMap {
-			opLen := len(opStr)
-
-			slog.Info("currPos", "cp", currPos, "op", opStr, "tokens", tokens)
-			if currPos+opLen <= len(tokens) {
-				match := true
-				for i := range opLen {
-					slog.Info("ranging", "v", tokens[currPos+i].Value)
-					if tokens[currPos+i].Value != string(opStr[i]) {
-						match = false
-						break
-					}
-				}
-
-				slog.Info("match", "m", match)
-				if match {
-					valueTokens := tokens[currPos+opLen:]
-
-					results = append(results, TMFExpression{
-						Operator: opType,
-						Value:    valueTokens.StringDecoded(),
-						Token:    tokens,
-					})
-
-					operatorFound = true
-					break
-				}
-			}
+		values := tokens[opLen:].SplitSubDelimiter(",")
+		for _, v := range values {
+			results = append(results, TMFExpression{
+				Operator: operator,
+				Value:    v.StringDecoded(),
+				Token:    v,
+			})
 		}
-
-		if operatorFound {
-			break
+	} else {
+		values := tokens.SplitSubDelimiter(",")
+		for _, v := range values {
+			results = append(results, TMFExpression{
+				Operator: operatorsMap[dotOperator],
+				Value:    v.StringDecoded(),
+				Token:    v,
+			})
 		}
-		currPos++
 	}
 
 	return results
@@ -338,4 +336,50 @@ func ParseTMFQuery(query string) (*TMFQuery, error) {
 	}
 
 	return tmfQuery, nil
+}
+
+func hasDotNotationOperatorSuffix(s string) bool {
+
+	for operator := range operatorsMap {
+		if operator[0] == '.' {
+			found := strings.HasSuffix(s, operator)
+			if found {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isPercentOperator(t rfcquery.Token) bool {
+	// the first token can be > / < / !
+	// even for cases like >= / <= / !=
+	return t.Value == "%3C" || t.Value == "%3E" || t.Value == "%21"
+}
+
+func parseOperatorFromTokenSlice(tokens rfcquery.TokenSlice) (TMFOperator, int) {
+	first := tokens[0].Value
+	var operator TMFOperator
+	var ok bool
+	opLen := 0
+
+	var second *string
+	if tokens[1].Type == rfcquery.TokenPercentEncoded {
+		second = &tokens[1].Value
+	}
+
+	if second != nil {
+		// try to get the operator using the first 2 token ( for >= / <= / !=)
+		operator, ok = operatorsMap[first+*second]
+		opLen = 2
+	}
+	if !ok {
+		// fallback to get operator using the first token ( > / < / =)
+		// Note. since the first token was already confirmed that is a valid operator, this is a safe map access
+		operator = operatorsMap[first]
+		opLen = 1
+	}
+
+	return operator, opLen
+
 }
