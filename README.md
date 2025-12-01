@@ -162,7 +162,43 @@ Built-in parsers with a common interface:
     - Supports operationName for multiple operations
     - Works with percent-encoded queries
     
-4. Custom Parser
+4. TMF API Guidelines (TMF630)
+    Parse complex filter expressions following TMF630 guidelines:
+
+    ```go
+    query := "dateTime%3E%3D2013-04-20;status=active,suspended&sort=-created,+name&limit=10"
+
+    tmf, err := rfcquery.ParseTMFQuery(query)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Access filter expressions
+    for _, expr := range tmf.Expressions {
+        fmt.Printf("%s %s %s\n", expr.Field, expr.Operator, expr.Value)
+        // Output: dateTime gte 2013-04-20
+        //         status eq active,suspended
+    }
+
+    // Access sorting
+    for _, sort := range tmf.Sorting {
+        fmt.Printf("Sort by %s (%s)\n", sort.Field, sort.Direction)
+        // Output: Sort by created (desc)
+        //         Sort by name (asc)
+    }
+
+    // Access pagination params
+    limit := tmf.OtherParams["limit"][0] // "10"
+    ```
+    - Encoded Operators ( %3E for `>`, %3C for `<`, etc..)
+    - Multiple separators ( `=` and `;` treated identically)
+    - List values (comma-separated)
+    - Sorting with +/- prefixes
+    - MultipleOperators on same field (date%3E2017-04-01;date%3C2017-05-01)
+    - Values containing encoded opeartors ( no false positives)
+    - RFC3986-compliant ( special chars like `@`, `:`, `/` work correctly)
+
+5. Custom Parser
     To implement a custom parser implement the `Parser` interface
     ```go
     type MyCustomParser struct{}
@@ -181,7 +217,7 @@ Built-in parsers with a common interface:
 
 ### Roadmap
  - [X] GraphQL query parser plugin
- - [ ] TMF query parser plugin
+ - [X] TMF query parser plugin
  - [ ] Query builder API (fluent interface)
  - [ ] Streaming parser for very large queries
  - [ ] JSON Schema validation for JSON-in-query
