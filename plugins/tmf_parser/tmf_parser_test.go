@@ -359,3 +359,32 @@ func TestTMFParser_Parse(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkTMFParser(b *testing.B) {
+	input := "name=John;age%3E25;status=active,suspended&sort=-created,+name&limit=10"
+
+	for b.Loop() {
+		scanner := rfcquery.NewScanner(input)
+
+		parser := tmfparser.NewTMFParser()
+		_, err := parser.Parse(scanner)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkTMFParser_Complex(b *testing.B) {
+	input := "dateTime%3E%3D2013-04-20;dateTime%3C%3D2017-04-20;name;John;status%21%3Ddeleted&sort=priority,-created"
+
+	b.ResetTimer()
+	for b.Loop() {
+		scanner := rfcquery.NewScanner(input)
+		parser := tmfparser.NewTMFParser()
+
+		_, err := parser.Parse(scanner)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
