@@ -75,26 +75,28 @@ func (p *FormURLEncodedParser) Parse(scanner *rfcquery.Scanner) (any, error) {
 		}
 
 		keyStr := currKey.StringDecoded()
-		valStr := currValue.StringDecoded()
+		for _, slice := range currValue.SplitSubDelimiter(",") {
+			valStr := slice.StringDecoded()
 
-		var valPos rfcquery.Position
-		if len(currValue) > 0 {
-			valPos = currValue[0].Start
-		} else {
-			valPos = rfcquery.Position{
-				Offset: -1,
+			var valPos rfcquery.Position
+			if len(currValue) > 0 {
+				valPos = currValue[0].Start
+			} else {
+				valPos = rfcquery.Position{
+					Offset: -1,
+				}
 			}
-		}
 
-		value := rfcquery.Value{
-			Value:       valStr,
-			KeyPos:      currKey[0].Start,
-			ValuePos:    valPos,
-			KeyTokens:   currKey,
-			ValueTokens: currValue,
-		}
+			value := rfcquery.Value{
+				Value:       valStr,
+				KeyPos:      currKey[0].Start,
+				ValuePos:    valPos,
+				KeyTokens:   currKey,
+				ValueTokens: currValue,
+			}
 
-		values.Add(keyStr, value)
+			values.Add(keyStr, value)
+		}
 
 		tok, err = scanner.PeekToken()
 		if err != nil {

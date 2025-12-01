@@ -33,6 +33,12 @@ func TestFormURLEncodedParser_Parse(t *testing.T) {
 			},
 		},
 		{
+			name:  "comma separated list",
+			input: "tag=go,library,rfc3986",
+			want: map[string][]string{
+				"tag": {"go", "library", "rfc3986"},
+			},
+		},{
 			name:  "duplicate keys",
 			input: "tag=go&tag=library&tag=rfc3986",
 			want: map[string][]string{
